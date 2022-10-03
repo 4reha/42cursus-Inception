@@ -1,0 +1,120 @@
+version: '3.9'
+
+services:
+
+  mariadb:
+    container_name: mariadb
+    build: ./requirements/mariadb
+    restart: always
+    env_file: .env
+    volumes:
+      - db:/var/lib/mysql
+    networks:
+      - project
+
+  wordpress:
+    container_name: wordpress
+    build: ./requirements/wordpress
+    env_file: .env
+    volumes:
+      - wp:/var/www/html/wordpress
+    networks:
+      - project
+    depends_on:
+      - mariadb
+
+  nginx:
+    container_name: nginx
+    build: ./requirements/nginx
+    volumes:
+      - wp:/var/www/html/wordpress
+    networks:
+      - project
+    depends_on:
+      - wordpress
+    ports:
+      #- "8080:80" #http
+      - "443:443" #https
+
+  redis:
+    build: ./requirements/bonus/redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - project
+    restart: always
+
+  ftp-server:
+    build: ./requirements/bonus/ftp-server
+    container_name: ftp-server
+    ports:
+      - "21:21"
+      - "21100-21110:21100-21110"
+    volumes:
+      - wp:/var/www/html/wordpress
+    networks:
+     - project
+    restart: always
+    environment:
+      FTP_USR: ${FTP_USR}
+      FTP_PWD: ${FTP_PWD}
+
+  adminer:
+    build: ./requirements/bonus/adminer  
+    container_name: adminer
+    restart: always
+    volumes:
+      - wp:/var/www/html
+    networks:
+      - project
+    depends_on:
+      - mariadb
+    
+  website:
+    build: ./requirements/bonus/static_website
+    container_name: website
+    restart: on-failure
+    volumes:
+      - wp:/var/www/html/wordpress
+    networks:
+      - project
+  
+  backup:
+    container_name: backup
+    build: ./requirements/bonus/backup
+    restart: always
+    volumes:
+      - db:/data/db/
+      - backup:/backup/
+    networks:
+      - project
+
+volumes:
+  db:
+    name: db
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/${USER}/data/db
+
+  wp:
+    name: wp
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/${USER}/data/wp
+
+  backup:
+    name: backup
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/${USER}/data/backup
+
+networks:
+  project:
+    driver: bridge
